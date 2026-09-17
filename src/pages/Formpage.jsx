@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
 import { useProject } from "../context/ProjectContext";
+import API_URL from "../config/api";
 
 const INDUSTRIES = [
   { id: "service-booking", icon: "✂️", label: "Service & booking (salons, gyms, consultants)" },
@@ -327,7 +328,7 @@ export default function BriefForm() {
 
       if (!currentProjectId) {
         const projectRes = await axios.post(
-          "http://localhost:8000/api/projects/create",
+          `${API_URL}/api/projects/create`,
           { userId: userId }
         );
         currentProjectId = projectRes.data.projectId;
@@ -340,7 +341,7 @@ export default function BriefForm() {
         logoForm.append("logo", logoFile);
 
         const uploadRes = await axios.post(
-          "http://localhost:8000/api/uploads/logo",
+          `${API_URL}/api/uploads/logo`,
           logoForm,
           { headers: { "Content-Type": "multipart/form-data" } }
         );
@@ -348,7 +349,7 @@ export default function BriefForm() {
       }
 
       await axios.post(
-        `http://localhost:8000/api/projects/${currentProjectId}/input`,
+        `${API_URL}/api/projects/${currentProjectId}/input`,
         {
           businessName: formData.businessName.trim(),
           industryId: formData.industryId,

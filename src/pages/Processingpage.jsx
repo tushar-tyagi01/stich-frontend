@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import axios from "axios";
+import API_URL from "../config/api";
 
 // Maps your Project.status enum to the 3 stages shown to the user.
 // input_submitted/brief_generating -> reading the brief
@@ -82,7 +83,7 @@ const stitchStartedRef = useRef(false);
 const fetchStatus = async () => {
   try {
     const res = await axios.get(
-      `http://localhost:8000/api/projects/${projectId}/get-project`
+      `${API_URL}/api/projects/${projectId}/get-project`
     );
 
     const data = res.data.project ?? res.data;
@@ -100,7 +101,7 @@ const fetchStatus = async () => {
 
       try {
         await axios.post(
-          `http://localhost:8000/api/projects/${projectId}/generate`
+          `${API_URL}/api/projects/${projectId}/generate`
         );
 
         console.log(
@@ -155,13 +156,13 @@ const handleRetry = async () => {
 
     if (project?.status === "brief_failed") {
       await axios.post(
-        `http://localhost:8000/api/projects/${projectId}/generate-brief`
+        `${API_URL}/api/projects/${projectId}/generate-brief`
       );
     } else if (project?.status === "failed") {
       stitchStartedRef.current = true;
 
       await axios.post(
-        `http://localhost:8000/api/projects/${projectId}/generate`
+        `${API_URL}/api/projects/${projectId}/generate`
       );
     }
 

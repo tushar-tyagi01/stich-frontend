@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import axios from "axios";
+import API_URL from "../config/api";
 
 export default function ResultsPage() {
   const { projectId } = useParams();
@@ -25,7 +26,7 @@ export default function ResultsPage() {
         // TODO: confirm this route + response shape against your backend.
         // Assumed: { project: { businessName, status }, pages: [{ _id, title, slug, previewImageUrl, liveUrl }] }
         const res = await axios.get(
-          `http://localhost:8000/api/projects/${projectId}/results`
+          `${API_URL}/api/projects/${projectId}/results`
         );
         setData(res.data);
         setLoadError("");
@@ -58,7 +59,7 @@ export default function ResultsPage() {
       setSubmittingFeedback(true);
       // TODO: this endpoint isn't built yet — wire it up when it exists.
       await axios.post(
-        `http://localhost:8000/api/projects/${projectId}/feedback`,
+        `${API_URL}/api/projects/${projectId}/feedback`,
         { message: feedback.trim() }
       );
       setFeedbackSent(true);
@@ -74,7 +75,7 @@ export default function ResultsPage() {
     try {
       setApproving(true);
       // TODO: this endpoint isn't built yet — wire it up when it exists.
-      await axios.post(`http://localhost:8000/api/projects/${projectId}/approve`);
+      await axios.post(`${API_URL}/api/projects/${projectId}/approve`);
       setApproved(true);
     } catch (err) {
       console.error("Approve error:", err);

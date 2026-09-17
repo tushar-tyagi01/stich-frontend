@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
 import { useProject } from "../context/ProjectContext";
+import API_URL from "../config/api";
 
 const SIGNIN_KEY = "stitch_auth_mode";
 
@@ -72,7 +73,7 @@ const Authform = ({ onSuccess }) => {
         : { name: formData.name.trim(), email: formData.email.trim() };
 
       const response = await axios.post(
-        "http://localhost:8000/api/users/register",
+        `${API_URL}/api/users/register`,
         payload
       );
 

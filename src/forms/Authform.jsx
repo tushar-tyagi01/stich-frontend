@@ -215,7 +215,6 @@ const Authform = ({ onSuccess }) => {
             Takes about a minute
           </span>
 
-          {/* heading + subtext switch with mode */}
           <h1 className="font-[Fraunces,serif] font-medium text-[clamp(1.9rem,4vw,2.6rem)] leading-[1.1] tracking-[-0.01em] mb-3">
             {isSignIn ? "Welcome back" : "Create your account"}
           </h1>

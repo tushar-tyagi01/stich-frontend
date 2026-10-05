@@ -5,6 +5,7 @@ import Formpage from './pages/Formpage';
 import Authform from './forms/Authform';
 import ProcessingPage from './pages/Processingpage';
 import ResultsPage from './pages/Resultpage';
+import ContactForm from './pages/Contactform';
 
 
 const App = () => {
@@ -15,6 +16,7 @@ const App = () => {
       <Route path='/auth' element={<Authform/>}/>
       <Route path='/processing/:projectId' element={<ProcessingPage/>}/>
       <Route path='/result/:projectId' element={<ResultsPage/>}/>
+      <Route path='/contact' element={<ContactForm/>}/>
       
     </Routes>
   )

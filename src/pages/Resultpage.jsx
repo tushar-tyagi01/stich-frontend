@@ -23,8 +23,7 @@ export default function ResultsPage() {
     const fetchResults = async () => {
       try {
         setLoading(true);
-        // TODO: confirm this route + response shape against your backend.
-        // Assumed: { project: { businessName, status }, pages: [{ _id, title, slug, previewImageUrl, liveUrl }] }
+      
         const res = await axios.get(
           `${API_URL}/api/projects/${projectId}/results`
         );
@@ -47,7 +46,7 @@ export default function ResultsPage() {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch {
-      // clipboard API unavailable — link is still visible/selectable in the address bar
+
     }
   };
 
@@ -57,7 +56,6 @@ export default function ResultsPage() {
 
     try {
       setSubmittingFeedback(true);
-      // TODO: this endpoint isn't built yet — wire it up when it exists.
       await axios.post(
         `${API_URL}/api/projects/${projectId}/feedback`,
         { message: feedback.trim() }
@@ -74,7 +72,6 @@ export default function ResultsPage() {
   const handleApprove = async () => {
     try {
       setApproving(true);
-      // TODO: this endpoint isn't built yet — wire it up when it exists.
       await axios.post(`${API_URL}/api/projects/${projectId}/approve`);
       setApproved(true);
     } catch (err) {
@@ -150,7 +147,6 @@ export default function ResultsPage() {
               </p>
             </div>
 
-            {/* generated pages */}
 {website ? (
   <div
     className="rise mb-10"

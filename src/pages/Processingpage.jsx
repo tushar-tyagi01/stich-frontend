@@ -3,10 +3,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import axios from "axios";
 import API_URL from "../config/api";
 
-// Maps your Project.status enum to the 3 stages shown to the user.
-// input_submitted/brief_generating -> reading the brief
-// brief_ready/generating           -> designing pages
-// completed                        -> done, redirect to results
+
 const STAGES = [
   {
     key: "brief",

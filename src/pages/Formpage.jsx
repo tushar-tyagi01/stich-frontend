@@ -3,23 +3,68 @@ import { useNavigate } from "react-router-dom";
 import axios from "axios";
 import { useProject } from "../context/ProjectContext";
 import API_URL from "../config/api";
+import IndustryFields from "../components/Industryfield";
+
+export const BRIEF_STORAGE_KEY = "stitch:briefData";
+
+// Keep in sync with the UserInput model limits.
+const BUSINESS_NAME_MIN = 2;
+const BUSINESS_NAME_MAX = 100;
+const DESCRIPTION_MAX = 1000;
+const FIELD_TEXT_MAX = 1000;
+const FIELD_LIST_MAX = 20;
 
 const INDUSTRIES = [
-  { id: "service-booking", icon: "✂️", label: "Service & booking (salons, gyms, consultants)" },
+  {
+    id: "service-booking",
+    icon: "✂️",
+    label: "Service & booking (salons, gyms, consultants)",
+  },
   { id: "ecommerce", icon: "🛍️", label: "Ecommerce / online store" },
-  { id: "restaurant-hospitality", icon: "🍽️", label: "Restaurant & hospitality" },
+  {
+    id: "restaurant-hospitality",
+    icon: "🍽️",
+    label: "Restaurant & hospitality",
+  },
   { id: "saas-software", icon: "💻", label: "SaaS / software product" },
   { id: "portfolio-creative", icon: "🎨", label: "Portfolio / creative work" },
   { id: "local-retail", icon: "🏪", label: "Local retail shop" },
-  { id: "professional-services", icon: "💼", label: "Professional services (legal, finance, agencies)" },
+  {
+    id: "professional-services",
+    icon: "💼",
+    label: "Professional services (legal, finance, agencies)",
+  },
   { id: "nonprofit-community", icon: "🤝", label: "Nonprofit / community" },
   { id: "education-learning", icon: "🎓", label: "Education & learning" },
   { id: "events-conferences", icon: "🎪", label: "Events & conferences" },
   { id: "real-estate-property", icon: "🏡", label: "Real estate / property" },
   { id: "directory-marketplace", icon: "🗂️", label: "Directory / marketplace" },
-  { id: "content-media-publication", icon: "📰", label: "Content, media & publications" },
-  { id: "membership-community", icon: "👥", label: "Membership / community platform" },
-  { id: "documentation-developer", icon: "📚", label: "Documentation / developer tools" },
+  {
+    id: "content-media-publication",
+    icon: "📰",
+    label: "Content, media & publications",
+  },
+  {
+    id: "membership-community",
+    icon: "👥",
+    label: "Membership / community platform",
+  },
+  {
+    id: "documentation-developer",
+    icon: "📚",
+    label: "Documentation / developer tools",
+  },
+  { id: "healthcare-medical", icon: "🩺", label: "Healthcare / medical" },
+  { id: "fitness-wellness", icon: "🧘", label: "Fitness / wellness" },
+  { id: "app-landing", icon: "📱", label: "Mobile app landing page" },
+  {
+    id: "personal-brand-coach",
+    icon: "🎤",
+    label: "Personal brand / coach / speaker",
+  },
+  { id: "travel-tourism", icon: "✈️", label: "Travel / tourism" },
+  { id: "automotive", icon: "🚗", label: "Automotive" },
+  { id: "wedding-event-venue", icon: "💍", label: "Wedding / event venue" },
 ];
 
 const VIBES = [
@@ -27,7 +72,11 @@ const VIBES = [
   { id: "warm-friendly", icon: "🧡", label: "Warm & friendly" },
   { id: "bold-playful", icon: "🎈", label: "Bold & playful" },
   { id: "elegant-luxury", icon: "💎", label: "Elegant & luxury" },
-  { id: "corporate-professional", icon: "🏢", label: "Corporate & professional" },
+  {
+    id: "corporate-professional",
+    icon: "🏢",
+    label: "Corporate & professional",
+  },
 ];
 
 const fieldCls =
@@ -50,16 +99,20 @@ function ErrorMsg({ children }) {
       >
         <path d="M6 0a6 6 0 1 0 0 12A6 6 0 0 0 6 0Zm0 8.2A.9.9 0 1 1 6 6.4a.9.9 0 0 1 0 1.8ZM5.1 3.2 5.3 5h1.4l.2-1.8L6 2.4l-.9.8Z" />
       </svg>
+
       {children}
     </p>
   );
 }
 
-/**
- * Styled, accessible dropdown (listbox pattern).
- * Keyboard: Enter/Space opens & selects, ArrowUp/Down moves, Home/End jumps,
- * Escape closes, Tab closes. Replaces the unstyleable native <select>.
- */
+function OptionalBadge() {
+  return (
+    <span className="text-[11px] font-normal text-[#9AA6BC] border border-[#2A3B5C] rounded-full px-2 py-0.5">
+      Optional
+    </span>
+  );
+}
+
 function Dropdown({
   id,
   label,
@@ -73,26 +126,34 @@ function Dropdown({
 }) {
   const [open, setOpen] = useState(false);
   const [activeIndex, setActiveIndex] = useState(-1);
+
   const rootRef = useRef(null);
   const listRef = useRef(null);
 
   const selected = options.find((o) => o.id === value) ?? null;
   const selectedIndex = options.findIndex((o) => o.id === value);
 
-  // Close when clicking anywhere outside
   useEffect(() => {
     if (!open) return;
+
     const onPointerDown = (e) => {
-      if (!rootRef.current?.contains(e.target)) setOpen(false);
+      if (!rootRef.current?.contains(e.target)) {
+        setOpen(false);
+      }
     };
+
     document.addEventListener("pointerdown", onPointerDown);
-    return () => document.removeEventListener("pointerdown", onPointerDown);
+
+    return () => {
+      document.removeEventListener("pointerdown", onPointerDown);
+    };
   }, [open]);
 
-  // Keep the keyboard-highlighted option visible
   useEffect(() => {
     if (open && activeIndex >= 0) {
-      listRef.current?.children[activeIndex]?.scrollIntoView({ block: "nearest" });
+      listRef.current?.children[activeIndex]?.scrollIntoView({
+        block: "nearest",
+      });
     }
   }, [activeIndex, open]);
 
@@ -103,49 +164,71 @@ function Dropdown({
 
   const commit = (index) => {
     const option = options[index];
-    if (option) onChange(option.id);
+
+    if (option) {
+      onChange(option.id);
+    }
+
     setOpen(false);
   };
 
   const handleKeyDown = (e) => {
     if (disabled) return;
+
     switch (e.key) {
       case "Enter":
       case " ":
         e.preventDefault();
         open ? commit(activeIndex) : openList();
         break;
+
       case "Escape":
         if (open) {
           e.stopPropagation();
           setOpen(false);
         }
         break;
+
       case "ArrowDown":
         e.preventDefault();
-        if (!open) openList();
-        else setActiveIndex((i) => Math.min(options.length - 1, i + 1));
+
+        if (!open) {
+          openList();
+        } else {
+          setActiveIndex((i) => Math.min(options.length - 1, i + 1));
+        }
+
         break;
+
       case "ArrowUp":
         e.preventDefault();
-        if (!open) openList();
-        else setActiveIndex((i) => Math.max(0, i - 1));
+
+        if (!open) {
+          openList();
+        } else {
+          setActiveIndex((i) => Math.max(0, i - 1));
+        }
+
         break;
+
       case "Home":
         if (open) {
           e.preventDefault();
           setActiveIndex(0);
         }
         break;
+
       case "End":
         if (open) {
           e.preventDefault();
           setActiveIndex(options.length - 1);
         }
         break;
+
       case "Tab":
         setOpen(false);
         break;
+
       default:
         break;
     }
@@ -158,7 +241,6 @@ function Dropdown({
       </label>
 
       <div className="relative">
-        {/* Trigger */}
         <button
           type="button"
           id={id}
@@ -166,7 +248,9 @@ function Dropdown({
           aria-haspopup="listbox"
           aria-expanded={open}
           aria-activedescendant={
-            open && activeIndex >= 0 ? `${id}-opt-${options[activeIndex].id}` : undefined
+            open && activeIndex >= 0
+              ? `${id}-opt-${options[activeIndex].id}`
+              : undefined
           }
           onClick={() => (open ? setOpen(false) : openList())}
           onKeyDown={handleKeyDown}
@@ -184,7 +268,10 @@ function Dropdown({
                 {selected.icon}
               </span>
             )}
-            <span className="truncate">{selected ? selected.label : placeholder}</span>
+
+            <span className="truncate">
+              {selected ? selected.label : placeholder}
+            </span>
           </span>
 
           <svg
@@ -197,11 +284,14 @@ function Dropdown({
             strokeWidth="1.8"
             aria-hidden="true"
           >
-            <path d="M4 6l4 4 4-4" strokeLinecap="round" strokeLinejoin="round" />
+            <path
+              d="M4 6l4 4 4-4"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
           </svg>
         </button>
 
-        {/* Options panel */}
         {open && (
           <ul
             ref={listRef}
@@ -226,16 +316,21 @@ function Dropdown({
                     isSelected
                       ? "text-[#E8A33D] font-semibold"
                       : isHighlighted
-                      ? "bg-[#24365A] text-[#F5F3EC]"
-                      : "text-[#F5F3EC]"
+                        ? "bg-[#24365A] text-[#F5F3EC]"
+                        : "text-[#F5F3EC]"
                   }`}
                 >
                   {option.icon && (
-                    <span aria-hidden="true" className="w-5 text-center shrink-0">
+                    <span
+                      aria-hidden="true"
+                      className="w-5 text-center shrink-0"
+                    >
                       {option.icon}
                     </span>
                   )}
+
                   <span className="min-w-0">{option.label}</span>
+
                   {isSelected && (
                     <svg
                       viewBox="0 0 16 16"
@@ -245,7 +340,11 @@ function Dropdown({
                       strokeWidth="2"
                       aria-hidden="true"
                     >
-                      <path d="M3 8.5l3.2 3L13 4.5" strokeLinecap="round" strokeLinejoin="round" />
+                      <path
+                        d="M3 8.5l3.2 3L13 4.5"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
                     </svg>
                   )}
                 </li>
@@ -260,9 +359,58 @@ function Dropdown({
   );
 }
 
+/**
+ * Industry field helpers.
+ * Supports text, textarea, select and list (array) values.
+ * Values are trimmed and capped to the backend validator limits so the
+ * user never hits a 400 on the next step.
+ */
+function hasFieldValue(value) {
+  if (Array.isArray(value)) {
+    return value.some((item) => String(item ?? "").trim());
+  }
+
+  if (typeof value === "string") {
+    return Boolean(value.trim());
+  }
+
+  if (value === null || value === undefined) {
+    return false;
+  }
+
+  return true;
+}
+
+function cleanValue(value) {
+  if (Array.isArray(value)) {
+    return value
+      .map((item) => String(item ?? "").trim().slice(0, FIELD_TEXT_MAX))
+      .filter(Boolean)
+      .slice(0, FIELD_LIST_MAX);
+  }
+
+  if (typeof value === "string") {
+    return value.trim().slice(0, FIELD_TEXT_MAX);
+  }
+
+  return value;
+}
+
+function getFilledIndustryFields(fields) {
+  return Object.fromEntries(
+    Object.entries(fields)
+      .map(([key, value]) => [key, cleanValue(value)])
+      .filter(([, value]) => hasFieldValue(value))
+  );
+}
+
 export default function BriefForm() {
   const navigate = useNavigate();
   const logoInputRef = useRef(null);
+
+  // Tracks the most recently selected industry so slow responses for an
+  // earlier selection can be ignored.
+  const latestIndustryRef = useRef("");
 
   const { userId, projectId, setProjectId } = useProject();
 
@@ -272,7 +420,10 @@ export default function BriefForm() {
     vibe: "",
     description: "",
     primaryColor: "",
+    industryFields: {},
   });
+
+  const [industryFieldsSchema, setIndustryFieldsSchema] = useState([]);
 
   const [logoFile, setLogoFile] = useState(null);
   const [logoPreview, setLogoPreview] = useState(null);
@@ -282,87 +433,217 @@ export default function BriefForm() {
   const [submitting, setSubmitting] = useState(false);
 
   const updateField = (name, value) => {
-    setFormData((prev) => ({ ...prev, [name]: value }));
-    setErrors((prev) => ({ ...prev, [name]: undefined }));
+    setFormData((prev) => ({
+      ...prev,
+      [name]: value,
+    }));
+
+    setErrors((prev) => ({
+      ...prev,
+      [name]: undefined,
+    }));
+  };
+
+  
+  const updateIndustry = async (industryId) => {
+    latestIndustryRef.current = industryId;
+
+    setSubmitError("");
+
+    setFormData((prev) => ({
+      ...prev,
+      industryId,
+      industryFields: {},
+    }));
+
+    setErrors((prev) => ({
+      ...prev,
+      industryId: undefined,
+    }));
+
+    setIndustryFieldsSchema([]);
+
+    if (!industryId) {
+      return;
+    }
+
+    try {
+      const response = await axios.get(
+        `${API_URL}/api/archetypes/inputschema/${industryId}`
+      );
+
+      if (latestIndustryRef.current !== industryId) return;
+
+      setIndustryFieldsSchema(response.data?.data?.inputSchema || []);
+    } catch (error) {
+      if (latestIndustryRef.current !== industryId) return;
+
+      console.error("Failed to fetch industry fields:", error);
+
+      setIndustryFieldsSchema([]);
+
+      setSubmitError(
+        error.response?.data?.message ||
+          "Failed to load industry fields. Please try again."
+      );
+    }
+  };
+
+  const updateIndustryField = (key, value) => {
+    setFormData((prev) => ({
+      ...prev,
+      industryFields: {
+        ...prev.industryFields,
+        [key]: value,
+      },
+    }));
+
+    setErrors((prev) => ({
+      ...prev,
+      [`industryFields.${key}`]: undefined,
+    }));
   };
 
   const handleLogoChange = (e) => {
     const file = e.target.files?.[0] || null;
+
     setLogoFile(file);
-    setLogoPreview(file ? URL.createObjectURL(file) : null);
+
+    setLogoPreview((previousPreview) => {
+      if (previousPreview) {
+        URL.revokeObjectURL(previousPreview);
+      }
+
+      return file ? URL.createObjectURL(file) : null;
+    });
   };
 
   const clearLogo = () => {
     setLogoFile(null);
-    setLogoPreview(null);
-    if (logoInputRef.current) logoInputRef.current.value = "";
+
+    setLogoPreview((previousPreview) => {
+      if (previousPreview) {
+        URL.revokeObjectURL(previousPreview);
+      }
+
+      return null;
+    });
+
+    if (logoInputRef.current) {
+      logoInputRef.current.value = "";
+    }
   };
+
+  useEffect(() => {
+    return () => {
+      if (logoPreview) {
+        URL.revokeObjectURL(logoPreview);
+      }
+    };
+  }, [logoPreview]);
 
   const validate = () => {
     const newErrors = {};
 
-    if (!formData.businessName.trim()) {
+    const name = formData.businessName.trim();
+
+    if (!name) {
       newErrors.businessName = "Required";
+    } else if (name.length < BUSINESS_NAME_MIN) {
+      newErrors.businessName = `Enter at least ${BUSINESS_NAME_MIN} characters`;
     }
+
     if (!formData.industryId) {
       newErrors.industryId = "Required";
     }
+
     if (!formData.vibe) {
       newErrors.vibe = "Required";
     }
 
     setErrors(newErrors);
+
     return Object.keys(newErrors).length === 0;
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+
     setSubmitError("");
 
-    if (!validate()) return;
+    if (!validate()) {
+      return;
+    }
 
     try {
       setSubmitting(true);
 
       let currentProjectId = projectId;
 
+      // Create the project only if one does not already exist.
       if (!currentProjectId) {
-        const projectRes = await axios.post(
-          `${API_URL}/api/projects/create`,
-          { userId: userId }
-        );
+        const projectRes = await axios.post(`${API_URL}/api/projects/create`, {
+          userId,
+        });
+
         currentProjectId = projectRes.data.projectId;
+
         setProjectId(currentProjectId);
       }
 
+      // Upload the logo if the user selected one.
       let logoUrl;
+
       if (logoFile) {
         const logoForm = new FormData();
+
         logoForm.append("logo", logoFile);
 
         const uploadRes = await axios.post(
           `${API_URL}/api/uploads/logo`,
           logoForm,
-          { headers: { "Content-Type": "multipart/form-data" } }
+          {
+            headers: {
+              "Content-Type": "multipart/form-data",
+            },
+          }
         );
+
         logoUrl = uploadRes.data.url;
       }
 
-      await axios.post(
-        `${API_URL}/api/projects/${currentProjectId}/input`,
-        {
-          businessName: formData.businessName.trim(),
-          industryId: formData.industryId,
-          vibe: formData.vibe,
-          description: formData.description.trim() || undefined,
-          primaryColor: formData.primaryColor || undefined,
-          logoUrl,
-        }
+      // Trim, cap, and drop empty industry-specific fields.
+      const filledIndustryFields = getFilledIndustryFields(
+        formData.industryFields
       );
 
-      navigate(`/processing/${currentProjectId}`);
+      // Save the brief locally for the contact step.
+      sessionStorage.setItem(
+        BRIEF_STORAGE_KEY,
+        JSON.stringify({
+          businessName: formData.businessName.trim(),
+
+          industryId: formData.industryId,
+
+          vibe: formData.vibe,
+
+          description: formData.description.trim() || undefined,
+
+          primaryColor: formData.primaryColor || undefined,
+
+          logoUrl,
+
+          industryFields:
+            Object.keys(filledIndustryFields).length > 0
+              ? filledIndustryFields
+              : undefined,
+        })
+      );
+
+      navigate("/contact");
     } catch (error) {
       console.error("Brief submission error:", error);
+
       setSubmitError(
         error.response?.data?.message ||
           "Something went wrong. Please try again."
@@ -375,25 +656,70 @@ export default function BriefForm() {
   return (
     <div className="relative min-h-screen bg-[#16223B] text-[#F5F3EC] font-[IBM_Plex_Sans,sans-serif] antialiased overflow-x-hidden">
       <style>{`
-        .glow { position:absolute; border-radius:9999px; filter:blur(90px); opacity:.55; pointer-events:none; }
-        @keyframes fadeUp { from { opacity:0; transform:translateY(14px); } to { opacity:1; transform:none; } }
-        .rise { opacity:0; animation:fadeUp .7s ease forwards; }
-        .btn-primary { transition:transform .15s ease, box-shadow .15s ease; }
-        @keyframes ddPop { from { opacity:0; transform:translateY(-4px) scale(.98); } to { opacity:1; transform:none; } }
-        .pop { animation:ddPop .16s ease forwards; transform-origin:top center; }
-        .dd-scroll::-webkit-scrollbar { width:8px; }
-        .dd-scroll::-webkit-scrollbar-thumb { background:#2A3B5C; border-radius:8px; }
-        .dd-scroll::-webkit-scrollbar-track { background:transparent; }
-        @media (prefers-reduced-motion:reduce) {
-          .rise { opacity:1 !important; animation:none !important; transform:none !important; }
-          .pop { opacity:1 !important; animation:none !important; transform:none !important; }
+        .glow {
+          position: absolute;
+          border-radius: 9999px;
+          filter: blur(90px);
+          opacity: .55;
+          pointer-events: none;
+        }
+
+        @keyframes fadeUp {
+          from { opacity: 0; transform: translateY(14px); }
+          to { opacity: 1; transform: none; }
+        }
+
+        .rise {
+          opacity: 0;
+          animation: fadeUp .7s ease forwards;
+        }
+
+        .btn-primary {
+          transition: transform .15s ease, box-shadow .15s ease;
+        }
+
+        @keyframes ddPop {
+          from { opacity: 0; transform: translateY(-4px) scale(.98); }
+          to { opacity: 1; transform: none; }
+        }
+
+        .pop {
+          animation: ddPop .16s ease forwards;
+          transform-origin: top center;
+        }
+
+        .dd-scroll::-webkit-scrollbar {
+          width: 8px;
+        }
+
+        .dd-scroll::-webkit-scrollbar-thumb {
+          background: #2A3B5C;
+          border-radius: 8px;
+        }
+
+        .dd-scroll::-webkit-scrollbar-track {
+          background: transparent;
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+          .rise {
+            opacity: 1 !important;
+            animation: none !important;
+            transform: none !important;
+          }
+
+          .pop {
+            opacity: 1 !important;
+            animation: none !important;
+            transform: none !important;
+          }
         }
       `}</style>
 
       <div className="glow w-[420px] h-[420px] bg-[#3D6EA5]/30 -top-24 -left-32" />
+
       <div className="glow w-[380px] h-[380px] bg-[#E8A33D]/20 top-40 -right-32" />
 
-      {/* header, consistent with the rest of the site */}
       <header className="relative z-10 max-w-7xl mx-auto flex items-center justify-between px-5 sm:px-8 h-16">
         <button
           onClick={() => navigate("/")}
@@ -401,27 +727,25 @@ export default function BriefForm() {
         >
           Stitch<span className="text-[#E8A33D]">.</span>
         </button>
-        <span className="text-sm text-[#9AA6BC]">Your progress is saved automatically</span>
       </header>
 
       <main className="relative z-10 max-w-3xl mx-auto px-5 sm:px-8 pt-8 sm:pt-12 pb-20">
-        {/* hero-style intro, same voice as the landing page */}
         <div className="rise mb-8 sm:mb-10">
           <span className="inline-flex items-center gap-2 border border-[#2A3B5C] rounded-full px-4 py-1.5 text-[13px] text-[#9AA6BC] mb-6 bg-[#1D2C4A]/60">
             <span className="w-2 h-2 rounded-full bg-[#E8A33D] animate-pulse" />
-            Design brief
+            Step 1 of 2 · Design brief
           </span>
 
           <h1 className="font-[Fraunces,serif] font-medium text-[clamp(1.9rem,4vw,2.6rem)] leading-[1.1] tracking-[-0.01em] mb-3">
             Tell us about your business.
           </h1>
+
           <p className="text-[15px] leading-relaxed text-[#9AA6BC] max-w-[50ch]">
             These details shape your layout, colors, and content — the more
             specific, the better your first draft.
           </p>
         </div>
 
-        {/* the form, styled to match */}
         <form
           onSubmit={handleSubmit}
           noValidate
@@ -430,38 +754,52 @@ export default function BriefForm() {
         >
           {/* Business name */}
           <div>
-            <label htmlFor="businessName" className="block text-sm font-medium mb-2">
+            <label
+              htmlFor="businessName"
+              className="block text-sm font-medium mb-2"
+            >
               Business name <span className="text-[#E8A33D]">*</span>
             </label>
+
             <input
               id="businessName"
               type="text"
               value={formData.businessName}
               onChange={(e) => updateField("businessName", e.target.value)}
               placeholder="e.g. Maple & Co."
+              maxLength={BUSINESS_NAME_MAX}
               disabled={submitting}
               className={fieldCls}
             />
+
             <ErrorMsg>{errors.businessName}</ErrorMsg>
           </div>
 
-          {/* Industry — styled dropdown */}
+          {/* Industry */}
           <Dropdown
             id="industryId"
-            label="Industry"
+            label="Business type"
             required
             placeholder="Select the closest match"
             options={INDUSTRIES}
             value={formData.industryId}
-            onChange={(value) => updateField("industryId", value)}
+            onChange={updateIndustry}
             error={errors.industryId}
             disabled={submitting}
           />
 
-          {/* Vibe — same styled dropdown */}
+          {/* Dynamic industry-specific fields */}
+          <IndustryFields
+            fields={industryFieldsSchema}
+            values={formData.industryFields}
+            onChange={updateIndustryField}
+            disabled={submitting}
+          />
+
+          {/* Website vibe */}
           <Dropdown
             id="vibe"
-            label="Vibe"
+            label="Website type"
             required
             placeholder="Pick a direction"
             options={VIBES}
@@ -473,17 +811,20 @@ export default function BriefForm() {
 
           {/* Description */}
           <div>
-            <label htmlFor="description" className="flex flex-wrap items-center gap-2 text-sm font-medium mb-2">
+            <label
+              htmlFor="description"
+              className="flex flex-wrap items-center gap-2 text-sm font-medium mb-2"
+            >
               Tell us about your business
-              <span className="text-[11px] font-normal text-[#9AA6BC] border border-[#2A3B5C] rounded-full px-2 py-0.5">
-                Optional
-              </span>
+              <OptionalBadge />
             </label>
+
             <textarea
               id="description"
               value={formData.description}
               onChange={(e) => updateField("description", e.target.value)}
               rows={4}
+              maxLength={DESCRIPTION_MAX}
               disabled={submitting}
               className={`${fieldCls} resize-none`}
               placeholder="What you do, who it's for, anything that helps us get the tone right..."
@@ -492,13 +833,16 @@ export default function BriefForm() {
 
           {/* Primary color + Logo */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+            {/* Primary color */}
             <div>
-              <label htmlFor="primaryColor" className="flex flex-wrap items-center gap-2 text-sm font-medium mb-2">
+              <label
+                htmlFor="primaryColor"
+                className="flex flex-wrap items-center gap-2 text-sm font-medium mb-2"
+              >
                 Primary color
-                <span className="text-[11px] font-normal text-[#9AA6BC] border border-[#2A3B5C] rounded-full px-2 py-0.5">
-                  Optional
-                </span>
+                <OptionalBadge />
               </label>
+
               <div className="flex items-center gap-3 bg-[#1D2C4A] border border-[#2A3B5C] rounded-xl px-4 py-2.5">
                 <input
                   id="primaryColor"
@@ -508,9 +852,11 @@ export default function BriefForm() {
                   disabled={submitting}
                   className="h-8 w-8 shrink-0 rounded-md border border-[#2A3B5C] bg-transparent p-0"
                 />
+
                 <span className="text-[15px] text-[#9AA6BC]">
                   {formData.primaryColor || "No preference — we'll pick one"}
                 </span>
+
                 {formData.primaryColor && (
                   <button
                     type="button"
@@ -523,13 +869,16 @@ export default function BriefForm() {
               </div>
             </div>
 
+            {/* Logo */}
             <div>
-              <label htmlFor="logo" className="flex flex-wrap items-center gap-2 text-sm font-medium mb-2">
+              <label
+                htmlFor="logo"
+                className="flex flex-wrap items-center gap-2 text-sm font-medium mb-2"
+              >
                 Logo
-                <span className="text-[11px] font-normal text-[#9AA6BC] border border-[#2A3B5C] rounded-full px-2 py-0.5">
-                  Optional
-                </span>
+                <OptionalBadge />
               </label>
+
               <div className="flex items-center gap-3 bg-[#1D2C4A] border border-[#2A3B5C] rounded-xl px-4 py-2.5">
                 {logoPreview ? (
                   <img
@@ -551,6 +900,7 @@ export default function BriefForm() {
                 >
                   {logoFile ? "Change" : "Upload"}
                 </label>
+
                 <input
                   id="logo"
                   ref={logoInputRef}
@@ -574,6 +924,7 @@ export default function BriefForm() {
             </div>
           </div>
 
+          {/* Submit error */}
           {submitError && (
             <p className="rounded-lg border border-[#E8A33D]/30 bg-[#E8A33D]/10 px-4 py-3 text-[13px] text-[#E8A33D]">
               {submitError}
@@ -605,13 +956,17 @@ export default function BriefForm() {
                 focus-visible:outline-offset-2
               "
             >
-              {submitting ? "Generating your design..." : "Generate my design →"}
+              {submitting ? "Next ...." : "Next →"}
             </button>
           </div>
         </form>
 
-        <p className="rise mt-6 text-[13px] text-[#9AA6BC]" style={{ animationDelay: ".2s" }}>
-          You can request changes to your draft once it's ready — nothing here is final.
+        <p
+          className="rise mt-6 text-[13px] text-[#9AA6BC]"
+          style={{ animationDelay: ".2s" }}
+        >
+          You can request changes to your draft once it's ready — nothing here
+          is final.
         </p>
       </main>
     </div>

@@ -359,26 +359,33 @@ function Dropdown({
   );
 }
 
-/**
- * Industry field helpers.
- * Supports text, textarea, select and list (array) values.
- * Values are trimmed and capped to the backend validator limits so the
- * user never hits a 400 on the next step.
- */
+
 function hasFieldValue(value) {
   if (Array.isArray(value)) {
-    return value.some((item) => String(item ?? "").trim());
+    return value.some(hasFieldValue);
   }
 
   if (typeof value === "string") {
-    return Boolean(value.trim());
+    return value.trim() !== "";
   }
 
   if (value === null || value === undefined) {
     return false;
   }
 
-  return true;
+  if (typeof value === "number") {
+    return !Number.isNaN(value);
+  }
+
+  if (value instanceof Blob) {
+    return value.size > 0;
+  }
+
+  if (typeof value === "object") {
+    return Object.values(value).some(hasFieldValue);
+  }
+
+  return true; // booleans
 }
 
 function cleanValue(value) {

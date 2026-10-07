@@ -56,10 +56,18 @@ export default function ResultsPage() {
 
     try {
       setSubmittingFeedback(true);
-      await axios.post(
+      const res = await axios.post(
         `${API_URL}/api/projects/${projectId}/feedback`,
         { message: feedback.trim() }
       );
+      setData((currentData) => ({
+        ...currentData,
+        website: {
+          ...currentData.website,
+          htmlUrl: res.data.htmlUrl,
+          imageUrl: res.data.imageUrl,
+        },
+      }));
       setFeedbackSent(true);
       setFeedback("");
     } catch (err) {

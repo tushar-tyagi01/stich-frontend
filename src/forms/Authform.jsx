@@ -28,7 +28,7 @@ const Authform = ({ onSuccess }) => {
   const navigate = useNavigate();
   const { setUserId } = useProject();
 
-  // Read once on mount — refresh keeps the chosen mode
+  
   const [isSignIn, setIsSignIn] = useState(
     () => localStorage.getItem(SIGNIN_KEY) === "signin"
   );
@@ -42,7 +42,7 @@ const Authform = ({ onSuccess }) => {
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
-  // Toggle between modes from the form itself — keeps localStorage in sync
+  
   const toggleMode = () => {
     const next = !isSignIn;
     setIsSignIn(next);

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import axios from "axios";
 import API_URL from "../config/api";
@@ -16,18 +16,31 @@ export default function ResultsPage() {
   const [feedback, setFeedback] = useState("");
   const [feedbackSent, setFeedbackSent] = useState(false);
   const [submittingFeedback, setSubmittingFeedback] = useState(false);
+  const [feedbackError, setFeedbackError] = useState("");
+  const [contentAction, setContentAction] = useState("provide_content");
+  const [selectedSections, setSelectedSections] = useState([]);
+  const [sectionContent, setSectionContent] = useState({});
+  const [newSections, setNewSections] = useState([{ id: 0, name: "", content: "" }]);
+  const [submittingContentChanges, setSubmittingContentChanges] = useState(false);
+  const [contentRefinementError, setContentRefinementError] = useState("");
+  const [contentRefinementSent, setContentRefinementSent] = useState(false);
+  const contentSubmissionRef = useRef(false);
+  const nextSectionId = useRef(1);
   const [approved, setApproved] = useState(false);
   const [approving, setApproving] = useState(false);
 
+  const fetchResults = useCallback(async () => {
+    const res = await axios.get(`${API_URL}/api/projects/${projectId}/results`);
+    console.log("Project result sections:", res.data.sections ?? []);
+    setData(res.data);
+    return res.data;
+  }, [projectId]);
+
   useEffect(() => {
-    const fetchResults = async () => {
+    const loadResults = async () => {
       try {
         setLoading(true);
-      
-        const res = await axios.get(
-          `${API_URL}/api/projects/${projectId}/results`
-        );
-        setData(res.data);
+        await fetchResults();
         setLoadError("");
       } catch (err) {
         console.error("Results fetch error:", err);
@@ -37,41 +50,48 @@ export default function ResultsPage() {
       }
     };
 
-    fetchResults();
-  }, [projectId]);
+    loadResults();
+  }, [fetchResults]);
 
   const handleCopyLink = async () => {
     try {
       await navigator.clipboard.writeText(window.location.href);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
-    } catch {
-
+    } catch (error) {
+      console.error("Copy shareable link error:", error);
     }
   };
 
   const handleSubmitFeedback = async (e) => {
     e.preventDefault();
-    if (!feedback.trim()) return;
+    const message = feedback.trim();
+    if (!message || submittingFeedback) return;
 
     try {
+      setFeedbackError("");
       setSubmittingFeedback(true);
       const res = await axios.post(
         `${API_URL}/api/projects/${projectId}/feedback`,
-        { message: feedback.trim() }
+        { message }
       );
       setData((currentData) => ({
         ...currentData,
         website: {
-          ...currentData.website,
-          htmlUrl: res.data.htmlUrl,
-          imageUrl: res.data.imageUrl,
+          ...currentData?.website,
+          ...(res.data.htmlUrl ? { htmlUrl: res.data.htmlUrl } : {}),
+          ...(res.data.imageUrl ? { imageUrl: res.data.imageUrl } : {}),
         },
       }));
       setFeedbackSent(true);
       setFeedback("");
     } catch (err) {
       console.error("Feedback error:", err);
+      setFeedbackError(
+        typeof err.response?.data?.message === "string"
+          ? err.response.data.message
+          : "We couldn't submit your design feedback. Please try again."
+      );
     } finally {
       setSubmittingFeedback(false);
     }
@@ -89,8 +109,147 @@ export default function ResultsPage() {
     }
   };
 
+  const handleSubmitContentChanges = async (e) => {
+    e.preventDefault();
+    if (contentSubmissionRef.current) return;
+
+    setContentRefinementError("");
+    setContentRefinementSent(false);
+
+    let sections;
+    if (contentAction === "provide_content") {
+      if (selectedSections.length === 0) {
+        setContentRefinementError("Select at least one AI-generated section.");
+        return;
+      }
+
+      const aiSectionNames = new Set(aiSections.map((section) => section.name));
+      if (selectedSections.some((name) => !aiSectionNames.has(name))) {
+        setContentRefinementError(
+          "Only AI-generated sections can be updated with your own content."
+        );
+        return;
+      }
+
+      const missingContent = selectedSections.some(
+        (name) => !sectionContent[name]?.trim()
+      );
+      if (missingContent) {
+        setContentRefinementError("Enter content for every selected section.");
+        return;
+      }
+
+      sections = selectedSections.map((name) => ({
+        name,
+        content: sectionContent[name].trim(),
+      }));
+    } else if (contentAction === "remove_sections") {
+      if (selectedSections.length === 0) {
+        setContentRefinementError("Select at least one AI-generated section to remove.");
+        return;
+      }
+
+      const aiSectionNames = new Set(aiSections.map((section) => section.name));
+      if (selectedSections.some((name) => !aiSectionNames.has(name))) {
+        setContentRefinementError(
+          "Only AI-generated sections can be removed."
+        );
+        return;
+      }
+
+      sections = selectedSections.map((name) => ({ name }));
+    } else {
+      const completedSections = newSections.map(({ name, content }) => ({
+        name: name.trim(),
+        content: content.trim(),
+      }));
+      const hasEmptySection = completedSections.some(
+        ({ name, content }) => !name || !content
+      );
+      if (hasEmptySection) {
+        setContentRefinementError("Enter a name and content for every new section.");
+        return;
+      }
+
+      const existingNames = new Set(
+        allSections.map((section) => section.name.trim().toLowerCase())
+      );
+      const submittedNames = new Set();
+      const hasDuplicateName = completedSections.some(({ name }) => {
+        const normalizedName = name.toLowerCase();
+        if (existingNames.has(normalizedName) || submittedNames.has(normalizedName)) {
+          return true;
+        }
+        submittedNames.add(normalizedName);
+        return false;
+      });
+      if (hasDuplicateName) {
+        setContentRefinementError("Each new section must have a unique name.");
+        return;
+      }
+
+      sections = completedSections;
+    }
+
+    try {
+      contentSubmissionRef.current = true;
+      setSubmittingContentChanges(true);
+      // Expected backend contract: POST /content-refinement accepts { action, sections }.
+      await axios.post(
+        `${API_URL}/api/projects/${projectId}/content-refinement`,
+        { action: contentAction, sections }
+      );
+      setContentRefinementSent(true);
+      setSelectedSections([]);
+      setSectionContent({});
+      setNewSections([{ id: nextSectionId.current++, name: "", content: "" }]);
+
+      try {
+        await fetchResults();
+      } catch (refreshError) {
+        console.error("Content refinement result refresh error:", refreshError);
+        setContentRefinementError(
+          "Your content changes were submitted, but we couldn't refresh the preview."
+        );
+      }
+    } catch (err) {
+      console.error("Content refinement error:", err);
+      const backendMessage = err.response?.data?.message;
+      setContentRefinementError(
+        typeof backendMessage === "string"
+          ? backendMessage
+          : "We couldn't apply those content changes. Please try again."
+      );
+    } finally {
+      contentSubmissionRef.current = false;
+      setSubmittingContentChanges(false);
+    }
+  };
+
   const project = data?.project;
   const website = data?.website;
+  const allSections = Array.isArray(data?.sections)
+    ? data.sections.filter((section) => section && typeof section.name === "string")
+    : [];
+  const userSections = allSections.filter(
+    (section) => section?.source === "user" && typeof section.name === "string"
+  );
+  const baseSections = allSections.filter(
+    (section) => section?.source === "base" && typeof section.name === "string"
+  );
+  const aiSections = allSections.filter(
+    (section) => section?.source === "ai" && typeof section.name === "string"
+  );
+  const hasSectionMetadata = Array.isArray(data?.sections);
+
+  const handleSectionSelection = (name) => {
+    setSelectedSections((current) =>
+      current.includes(name)
+        ? current.filter((sectionName) => sectionName !== name)
+        : [...current, name]
+    );
+    setContentRefinementError("");
+  };
 
   return (
     <div className="relative min-h-screen bg-[#16223B] text-[#F5F3EC] font-[IBM_Plex_Sans,sans-serif] antialiased overflow-x-hidden">
@@ -203,6 +362,299 @@ export default function ResultsPage() {
   </div>
 )}
 
+            {!approved && (
+              <section
+                className="rise mb-10 bg-[#1D2C4A]/60 border border-[#2A3B5C] rounded-2xl p-6 sm:p-8"
+                aria-labelledby="content-refinement-heading"
+              >
+                <div className="mb-6">
+                  <h2
+                    id="content-refinement-heading"
+                    className="font-[Fraunces,serif] font-medium text-xl mb-2"
+                  >
+                    Refine your content
+                  </h2>
+                  <p className="text-[13px] text-[#9AA6BC]">
+                    Manage the sections in your website separately from design changes.
+                  </p>
+                </div>
+
+                {!hasSectionMetadata && (
+                  <p className="mb-6 rounded-xl border border-[#2A3B5C] bg-[#16223B]/50 p-4 text-[13px] text-[#9AA6BC]">
+                    Section details aren't available for this design yet. You can still add a new section.
+                  </p>
+                )}
+
+                <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 mb-7">
+                  <div>
+                    <h3 className="text-sm font-semibold text-[#F5F3EC] mb-3">
+                      Core sections
+                    </h3>
+                    {baseSections.length ? (
+                      <ul className="space-y-2">
+                        {baseSections.map((section) => (
+                          <li
+                            key={section.id || section.name}
+                            className="flex items-center gap-3 rounded-lg border border-[#2A3B5C] bg-[#16223B]/50 px-3 py-2.5 text-sm"
+                          >
+                            <span className="text-[#E8A33D]" aria-hidden="true">✓</span>
+                            {section.name}
+                            <span className="ml-auto text-xs text-[#9AA6BC]">Always included</span>
+                          </li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <p className="text-[13px] text-[#9AA6BC]">No core sections.</p>
+                    )}
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-semibold text-[#F5F3EC] mb-3">
+                      User-provided sections
+                    </h3>
+                    {userSections.length ? (
+                      <ul className="space-y-2">
+                        {userSections.map((section, index) => (
+                          <li
+                            key={section.id || `${section.name}-${index}`}
+                            className="flex items-center gap-3 rounded-lg border border-[#2A3B5C] bg-[#16223B]/50 px-3 py-2.5 text-sm"
+                          >
+                            <span className="text-[#E8A33D]" aria-hidden="true">✓</span>
+                            {section.name}
+                          </li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <p className="text-[13px] text-[#9AA6BC]">
+                        {hasSectionMetadata ? "No user-provided sections." : "Waiting for section details."}
+                      </p>
+                    )}
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-semibold text-[#F5F3EC] mb-3">
+                      AI-generated sections
+                    </h3>
+                    {aiSections.length ? (
+                      <ul className="space-y-2">
+                        {aiSections.map((section, index) => (
+                          <li key={section.id || `${section.name}-${index}`}>
+                            <label className={`flex items-center gap-3 rounded-lg border border-[#2A3B5C] bg-[#16223B]/50 px-3 py-2.5 text-sm ${
+                              contentAction === "add_section"
+                                ? "cursor-not-allowed opacity-60"
+                                : "cursor-pointer hover:border-[#3D6EA5]"
+                            }`}>
+                              <input
+                                type="checkbox"
+                                checked={selectedSections.includes(section.name)}
+                                onChange={() => handleSectionSelection(section.name)}
+                                disabled={submittingContentChanges || contentAction === "add_section"}
+                                className="accent-[#E8A33D]"
+                              />
+                              {section.name}
+                            </label>
+                          </li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <p className="text-[13px] text-[#9AA6BC]">
+                        {hasSectionMetadata ? "No AI-generated sections." : "Waiting for section details."}
+                      </p>
+                    )}
+                  </div>
+                </div>
+
+                <form onSubmit={handleSubmitContentChanges}>
+                  <fieldset disabled={submittingContentChanges}>
+                    <legend className="text-sm font-semibold mb-3">Choose a content action</legend>
+                    <div className="grid gap-3 sm:grid-cols-3 mb-6">
+                      {[
+                        ["provide_content", "Use my own content"],
+                        ["remove_sections", "Remove selected sections"],
+                        ["add_section", "Add a new section"],
+                      ].map(([value, label]) => (
+                        <label
+                          key={value}
+                          className={`flex items-start gap-3 rounded-xl border px-4 py-3 text-sm cursor-pointer ${
+                            contentAction === value
+                              ? "border-[#E8A33D] bg-[#16223B]/70"
+                              : "border-[#2A3B5C] bg-[#16223B]/40"
+                          }`}
+                        >
+                          <input
+                            type="radio"
+                            name="contentAction"
+                            value={value}
+                            checked={contentAction === value}
+                            onChange={() => {
+                              setContentAction(value);
+                              setContentRefinementError("");
+                              setContentRefinementSent(false);
+                            }}
+                            className="mt-0.5 accent-[#E8A33D]"
+                          />
+                          {label}
+                        </label>
+                      ))}
+                    </div>
+                  </fieldset>
+
+                  {contentAction === "provide_content" && (
+                    <div className="space-y-4 mb-6">
+                      {selectedSections.length ? (
+                        selectedSections.map((name) => (
+                          <div key={name}>
+                            <label
+                              htmlFor={`section-content-${encodeURIComponent(name)}`}
+                              className="block text-sm font-medium mb-2"
+                            >
+                              {name}
+                            </label>
+                            <textarea
+                              id={`section-content-${encodeURIComponent(name)}`}
+                              value={sectionContent[name] || ""}
+                              onChange={(e) => {
+                                setSectionContent((current) => ({
+                                  ...current,
+                                  [name]: e.target.value,
+                                }));
+                                setContentRefinementError("");
+                              }}
+                              rows={3}
+                              placeholder={`Enter your content for ${name}`}
+                              disabled={submittingContentChanges}
+                              className="w-full bg-[#16223B] border border-[#2A3B5C] rounded-xl px-4 py-3 text-[15px] text-[#F5F3EC] placeholder-[#9AA6BC]/70 focus:outline-none focus:border-[#E8A33D] focus:ring-2 focus:ring-[#E8A33D]/20 resize-y"
+                            />
+                          </div>
+                        ))
+                      ) : (
+                        <p className="text-[13px] text-[#9AA6BC]">
+                          Select one or more AI-generated sections above to provide replacement content.
+                        </p>
+                      )}
+                    </div>
+                  )}
+
+                  {contentAction === "remove_sections" && (
+                    <p className="mb-6 text-[13px] text-[#9AA6BC]">
+                      Select one or more AI-generated sections above to remove them.
+                    </p>
+                  )}
+
+                  {contentAction === "add_section" && (
+                    <div className="space-y-4 mb-6">
+                      {newSections.map((section, index) => (
+                        <fieldset
+                          key={section.id}
+                          className="rounded-xl border border-[#2A3B5C] p-4"
+                        >
+                          <legend className="px-2 text-sm font-semibold">
+                            New section {index + 1}
+                          </legend>
+                          <div className="space-y-4">
+                            <div>
+                              <label
+                                htmlFor={`new-section-name-${section.id}`}
+                                className="block text-sm font-medium mb-2"
+                              >
+                                Section name
+                              </label>
+                              <input
+                                id={`new-section-name-${section.id}`}
+                                value={section.name}
+                                onChange={(e) => {
+                                  const name = e.target.value;
+                                  setNewSections((current) =>
+                                    current.map((item) =>
+                                      item.id === section.id ? { ...item, name } : item
+                                    )
+                                  );
+                                  setContentRefinementError("");
+                                }}
+                                placeholder="e.g. Special Offers"
+                                disabled={submittingContentChanges}
+                                className="w-full bg-[#16223B] border border-[#2A3B5C] rounded-xl px-4 py-3 text-[15px] text-[#F5F3EC] placeholder-[#9AA6BC]/70 focus:outline-none focus:border-[#E8A33D] focus:ring-2 focus:ring-[#E8A33D]/20"
+                              />
+                            </div>
+                            <div>
+                              <label
+                                htmlFor={`new-section-content-${section.id}`}
+                                className="block text-sm font-medium mb-2"
+                              >
+                                Section content
+                              </label>
+                              <textarea
+                                id={`new-section-content-${section.id}`}
+                                value={section.content}
+                                onChange={(e) => {
+                                  const content = e.target.value;
+                                  setNewSections((current) =>
+                                    current.map((item) =>
+                                      item.id === section.id ? { ...item, content } : item
+                                    )
+                                  );
+                                  setContentRefinementError("");
+                                }}
+                                rows={3}
+                                placeholder="Enter the content for this section"
+                                disabled={submittingContentChanges}
+                                className="w-full bg-[#16223B] border border-[#2A3B5C] rounded-xl px-4 py-3 text-[15px] text-[#F5F3EC] placeholder-[#9AA6BC]/70 focus:outline-none focus:border-[#E8A33D] focus:ring-2 focus:ring-[#E8A33D]/20 resize-y"
+                              />
+                            </div>
+                            {newSections.length > 1 && (
+                              <button
+                                type="button"
+                                disabled={submittingContentChanges}
+                                onClick={() => {
+                                  setNewSections((current) =>
+                                    current.filter((item) => item.id !== section.id)
+                                  );
+                                  setContentRefinementError("");
+                                }}
+                                className="text-sm text-[#9AA6BC] hover:text-[#F5F3EC]"
+                              >
+                                Remove this new section
+                              </button>
+                            )}
+                          </div>
+                        </fieldset>
+                      ))}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setNewSections((current) => [
+                            ...current,
+                            { id: nextSectionId.current++, name: "", content: "" },
+                          ]);
+                          setContentRefinementError("");
+                        }}
+                        disabled={submittingContentChanges}
+                        className="border border-[#2A3B5C] bg-[#16223B]/50 text-[#F5F3EC] text-sm font-semibold px-4 py-2.5 rounded-lg hover:border-[#3D6EA5] disabled:opacity-60"
+                      >
+                        Add another section
+                      </button>
+                    </div>
+                  )}
+
+                  {contentRefinementError && (
+                    <p role="alert" className="mb-4 text-[13px] text-[#F2A6A6]">
+                      {contentRefinementError}
+                    </p>
+                  )}
+                  {contentRefinementSent && (
+                    <p role="status" className="mb-4 text-[13px] text-[#9AA6BC]">
+                      Content changes submitted.
+                    </p>
+                  )}
+                  <button
+                    type="submit"
+                    disabled={submittingContentChanges}
+                    className="bg-[#E8A33D] text-[#16223B] font-semibold text-sm px-5 py-2.5 rounded-lg disabled:opacity-60"
+                  >
+                    {submittingContentChanges ? "Applying..." : "Apply Content Changes"}
+                  </button>
+                </form>
+              </section>
+            )}
+
             {/* actions */}
             <div className="rise bg-[#1D2C4A]/60 border border-[#2A3B5C] rounded-2xl p-6 sm:p-8" style={{ animationDelay: ".2s" }}>
               {approved ? (
@@ -239,21 +691,31 @@ export default function ResultsPage() {
 
               {showFeedback && !approved && (
                 <form onSubmit={handleSubmitFeedback} className="mt-6 pt-6 border-t border-[#2A3B5C]/60">
+                  {feedbackError && (
+                    <p role="alert" className="mb-3 text-[13px] text-[#F2A6A6]">
+                      {feedbackError}
+                    </p>
+                  )}
                   {feedbackSent ? (
                     <p className="text-[13px] text-[#9AA6BC]">
-                      Got it — we'll work on your changes and update this page.
+                      Your design has been updated.
                     </p>
                   ) : (
                     <>
                       <label htmlFor="feedback" className="block text-sm font-medium mb-2">
-                        What should change?
+                        Anything you want to change in the design?
                       </label>
                       <textarea
                         id="feedback"
                         value={feedback}
-                        onChange={(e) => setFeedback(e.target.value)}
+                        onChange={(e) => {
+                          setFeedback(e.target.value);
+                          setFeedbackError("");
+                          setFeedbackSent(false);
+                        }}
                         rows={3}
                         placeholder="e.g. Make the hero darker, change the services layout..."
+                        disabled={submittingFeedback}
                         className="w-full bg-[#1D2C4A] border border-[#2A3B5C] rounded-xl px-4 py-3 text-[15px] text-[#F5F3EC] placeholder-[#9AA6BC]/70 focus:outline-none focus:border-[#E8A33D] focus:ring-2 focus:ring-[#E8A33D]/20 resize-none"
                       />
                       <button
@@ -261,7 +723,7 @@ export default function ResultsPage() {
                         disabled={submittingFeedback || !feedback.trim()}
                         className="mt-3 bg-[#E8A33D] text-[#16223B] font-semibold text-sm px-5 py-2.5 rounded-lg disabled:opacity-60"
                       >
-                        {submittingFeedback ? "Sending..." : "Send"}
+                        {submittingFeedback ? "Applying..." : "Request Changes"}
                       </button>
                     </>
                   )}
